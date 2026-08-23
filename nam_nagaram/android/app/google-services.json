@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "904363925614",
+    "project_id": "municipal-assets",
+    "storage_bucket": "municipal-assets.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:904363925614:android:168b9aa19bbaacefeb467f",
+        "android_client_info": {
+          "package_name": "com.example.nam_nagaram"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEBR7jQJG_e4nAQD6uIl-p9VEUjqOseAk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:904363925614:android:fa4e51daca02d828eb467f",
+        "android_client_info": {
+          "package_name": "municipal.assets"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEBR7jQJG_e4nAQD6uIl-p9VEUjqOseAk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
