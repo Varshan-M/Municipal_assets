@@ -23,7 +23,7 @@ from verify_image import verify_image_logic, verify_resolution_logic
 
 app = FastAPI(title="Municipal Asset Verification API")
 
-MODELS_DIR = Path(__file__).parent.parent / "models"
+MODELS_DIR = Path(os.path.abspath(__file__)).parent.parent / "models"
 MODEL_PATH = MODELS_DIR / "municipal_asset_model.keras"
 CLASSES_PATH = MODELS_DIR / "classes.json"
 IMG_SIZE = (224, 224)
