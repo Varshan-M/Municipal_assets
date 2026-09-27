@@ -1,0 +1,11 @@
+tensorflow>=2.10.0
+numpy>=1.23.0
+pillow>=9.0.0
+scikit-learn>=1.0.2
+matplotlib>=3.5.0
+fastapi>=0.88.0
+uvicorn>=0.20.0
+python-multipart>=0.0.5
+firebase-admin>=6.2.0
+google-generativeai>=0.3.0
+python-dotenv>=1.0.0
