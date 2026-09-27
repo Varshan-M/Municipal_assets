@@ -23,7 +23,7 @@ from verify_image import verify_image_logic, verify_resolution_logic
 
 app = FastAPI(title="Municipal Asset Verification API")
 
-MODELS_DIR = Path(r"D:\Municipal_assets\MunicipalAI\models")
+MODELS_DIR = Path(__file__).parent.parent / "models"
 MODEL_PATH = MODELS_DIR / "municipal_asset_model.keras"
 CLASSES_PATH = MODELS_DIR / "classes.json"
 IMG_SIZE = (224, 224)
@@ -52,7 +52,8 @@ def load_model_on_startup():
     # Initialize Firebase if not already initialized
     try:
         if not firebase_admin._apps:
-            cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), "firebase-service-account.json"))
+            cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", os.path.join(os.path.dirname(__file__), "firebase-service-account.json"))
+            cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
         db = firestore.client()
         print("Firebase initialized in main.py")
