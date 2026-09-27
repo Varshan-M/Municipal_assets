@@ -7,6 +7,8 @@ export interface User {
   email: string;
   phoneNumber?: string;
   phoneVerified?: boolean;
+  role?: string;
+  teamId?: string;
   createdAt: Timestamp;
 }
 
@@ -17,10 +19,12 @@ export interface Complaint {
   issueType: string;
   description: string;
   imageUrl?: string; // Base64 string or URL
+  resolutionImageUrl?: string; // Image uploaded when resolved
   latitude: number;
   longitude: number;
   address: string;
-  status: 'Submitted' | 'Under Review' | 'Verified' | 'Assigned' | 'In Progress' | 'Resolved' | 'Rejected' | 'Closed';
+  status: 'Submitted' | 'Under Review' | 'Verified' | 'Assigned' | 'In Progress' | 'Team Assigned' | 'Work In Progress' | 'Resolved' | 'Rejected' | 'Closed';
+  citizenPriority?: string;
   priority?: 'Low' | 'Medium' | 'High' | 'Critical' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   department?: string;
   assignedDepartment?: string;
@@ -58,6 +62,9 @@ export interface TimelineEntry {
 export interface Team {
   id: string;
   name: string;
-  department: string;
-  isActive: boolean;
+  skills: string[];
+  isOnline: boolean;
+  latitude: number;
+  longitude: number;
+  lastUpdated?: Timestamp;
 }

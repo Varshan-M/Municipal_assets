@@ -10,6 +10,12 @@ import { Complaint, User, TimelineEntry } from "@/types";
 import { ArrowLeft, User as UserIcon, MapPin, Camera, AlertTriangle, Clock, ShieldCheck, X, Cpu } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
+import dynamic from 'next/dynamic';
+
+const SingleLocationMap = dynamic(() => import('@/components/map/SingleLocationMap'), { 
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-gray-100 animate-pulse flex items-center justify-center">Loading map...</div>
+});
 
 export default function ComplaintDetailPage() {
   const params = useParams();
@@ -275,7 +281,7 @@ export default function ComplaintDetailPage() {
               <span className={clsx(
                 "px-2.5 py-1 rounded-full text-xs font-semibold border", 
                 complaint.status === 'Resolved' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 
-                complaint.status === 'In Progress' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                complaint.status === 'In Progress' || complaint.status === 'Team Assigned' ? 'bg-blue-100 text-blue-800 border-blue-200' :
                 'bg-amber-100 text-amber-800 border-amber-200'
               )}>
                 {complaint.status}
@@ -290,15 +296,21 @@ export default function ComplaintDetailPage() {
                 <p className="text-sm text-text-muted mb-1">Issue Type</p>
                 <p className="font-medium text-text">{complaint.issueType}</p>
               </div>
+              <div>
+                <p className="text-sm text-text-muted mb-1">Assigned Team</p>
+                <p className="font-medium text-text">
+                  {complaint.assignedTeamId || complaint.assignedTeam || 'Unassigned'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-text-muted mb-1">Priority</p>
+                <p className="font-medium text-text">{complaint.priority || complaint.citizenPriority || 'Not set'}</p>
+              </div>
               <div className="md:col-span-2">
                 <p className="text-sm text-text-muted mb-1">Description</p>
                 <p className="text-text bg-gray-50 p-4 rounded-lg text-sm border border-gray-100">
                   {complaint.description || 'No description provided.'}
                 </p>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted mb-1">Priority</p>
-                <p className="font-medium text-text">{complaint.priority || 'Not set'}</p>
               </div>
             </div>
           </div>
@@ -307,23 +319,42 @@ export default function ComplaintDetailPage() {
           <div className="bg-surface border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50 flex items-center gap-2">
               <Camera className="w-4 h-4 text-primary" />
-              <h2 className="font-semibold text-text">Evidence</h2>
+              <h2 className="font-semibold text-text">Evidence & Resolution</h2>
             </div>
-            <div className="p-6">
-              {complaint.imageUrl ? (
-                // Note: handling base64 strings if that's how it's stored
-                <div className="rounded-lg overflow-hidden border border-gray-200 max-w-md">
-                  <img 
-                    src={complaint.imageUrl.startsWith('http') || complaint.imageUrl.startsWith('data:') ? complaint.imageUrl : `data:image/jpeg;base64,${complaint.imageUrl}`} 
-                    alt="Issue Evidence" 
-                    className="w-full h-auto object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="p-12 text-center border-2 border-dashed border-gray-200 rounded-lg text-text-muted">
-                  No image evidence provided.
-                </div>
-              )}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm font-semibold text-text-muted mb-2">Before (Reported Issue)</p>
+                {complaint.imageUrl ? (
+                  <div className="rounded-lg overflow-hidden border border-gray-200 w-full">
+                    <img 
+                      src={complaint.imageUrl.startsWith('http') || complaint.imageUrl.startsWith('data:') ? complaint.imageUrl : `data:image/jpeg;base64,${complaint.imageUrl}`} 
+                      alt="Issue Evidence" 
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-lg text-text-muted text-sm">
+                    No before image provided.
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <p className="text-sm font-semibold text-text-muted mb-2">After (Resolution by Crew)</p>
+                {complaint.resolutionImageUrl ? (
+                  <div className="rounded-lg overflow-hidden border border-gray-200 w-full border-emerald-300">
+                    <img 
+                      src={complaint.resolutionImageUrl.startsWith('http') || complaint.resolutionImageUrl.startsWith('data:') ? complaint.resolutionImageUrl : `data:image/jpeg;base64,${complaint.resolutionImageUrl}`} 
+                      alt="Resolution Evidence" 
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-lg text-text-muted text-sm">
+                    {complaint.status === 'Resolved' ? 'Resolved without image' : 'Resolution pending'}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -335,14 +366,13 @@ export default function ComplaintDetailPage() {
             </div>
             <div className="p-6">
               <p className="font-medium text-text mb-4">{complaint.address}</p>
-              <div className="bg-gray-100 rounded-lg w-full h-64 flex items-center justify-center border border-gray-200 text-text-muted relative overflow-hidden">
-                {/* Map stub for now */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                <div className="z-10 flex flex-col items-center bg-white/80 p-4 rounded-lg backdrop-blur-sm border border-gray-200 shadow-sm">
-                  <MapPin className="w-8 h-8 text-red-500 mb-2" />
-                  <p className="text-sm font-medium">Map integration pending</p>
-                  <p className="text-xs">{complaint.latitude}, {complaint.longitude}</p>
-                </div>
+              <div className="bg-gray-100 rounded-lg w-full h-64 border border-gray-200 text-text-muted relative overflow-hidden">
+                <SingleLocationMap 
+                  latitude={complaint.latitude as number} 
+                  longitude={complaint.longitude as number}
+                  title={`${complaint.assetType} - ${complaint.issueType}`}
+                  subtitle={complaint.id}
+                />
               </div>
             </div>
           </div>
