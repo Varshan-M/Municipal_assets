@@ -12,7 +12,8 @@ import {
   BarChart3, 
   Building2, 
   Users,
-  Bot
+  Bot,
+  Activity
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -24,6 +25,7 @@ const navItems = [
   { name: "Assets", href: "/assets", icon: Building2 },
   { name: "Teams", href: "/teams", icon: Users },
   { name: "AI Agents", href: "/ai-agents", icon: Bot },
+  { name: "IoT Sensors", href: "/sensors", icon: Activity },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
