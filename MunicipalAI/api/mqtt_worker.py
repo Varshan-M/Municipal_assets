@@ -18,7 +18,8 @@ load_dotenv()
 print("[MQTT Worker] Initializing Firebase...")
 try:
     if not firebase_admin._apps:
-        cred = credentials.Certificate("firebase_credentials.json")
+        cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", os.path.join(os.path.dirname(__file__), "firebase-service-account.json"))
+        cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
     db = firestore.client()
     print("[MQTT Worker] Firebase connected successfully!")
