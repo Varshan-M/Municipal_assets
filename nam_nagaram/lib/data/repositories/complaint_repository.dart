@@ -251,6 +251,43 @@ class ComplaintRepository {
     }
   }
 
+  Future<void> markAsBarricaded({
+    required String complaintId,
+    required File imageFile,
+    required String userId,
+  }) async {
+    try {
+      final barricadeImageUrl = await uploadImage(imageFile, complaintId, '${userId}_barricade');
+
+      final batch = _firestore.batch();
+      final complaintRef = _firestore.collection('complaints').doc(complaintId);
+      
+      batch.update(complaintRef, {
+        'barricadeImageUrl': barricadeImageUrl,
+        // Optional: you could change the status to 'Barricaded' or keep it 'Work In Progress'.
+        // The prompt says "The barricade remains in place until the actual repair is completed",
+        // implying it's a sub-state of Work In Progress. We'll just update the image for now,
+        // or change status if needed. Let's keep it 'Work In Progress' and just store the image.
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final timelineId = _uuid.v4();
+      final timelineRef = complaintRef.collection('timeline').doc(timelineId);
+      final timeline = TimelineModel(
+        id: timelineId,
+        status: 'Temporary Barricade',
+        message: 'A temporary safety barricade has been placed to secure the area.',
+        timestamp: DateTime.now(),
+        updatedBy: userId,
+      );
+      batch.set(timelineRef, timeline.toMap());
+
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Failed to mark as barricaded: $e');
+    }
+  }
+
   Future<void> submitRating({
     required String complaintId,
     required int rating,

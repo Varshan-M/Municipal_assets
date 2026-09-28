@@ -370,7 +370,7 @@ export default function ComplaintDetailPage() {
               <Camera className="w-4 h-4 text-primary" />
               <h2 className="font-semibold text-text">Evidence & Resolution</h2>
             </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={clsx("p-6 grid gap-6", complaint.barricadeImageUrl ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
               <div>
                 <p className="text-sm font-semibold text-text-muted mb-2">Before (Reported Issue)</p>
                 {complaint.imageUrl ? (
@@ -388,6 +388,19 @@ export default function ComplaintDetailPage() {
                 )}
               </div>
               
+              {complaint.barricadeImageUrl && (
+                <div>
+                  <p className="text-sm font-semibold text-text-muted mb-2">During (Temporary Barricade)</p>
+                  <div className="rounded-lg overflow-hidden border border-gray-200 w-full border-orange-300">
+                    <img 
+                      src={complaint.barricadeImageUrl.startsWith('http') || complaint.barricadeImageUrl.startsWith('data:') ? complaint.barricadeImageUrl : `data:image/jpeg;base64,${complaint.barricadeImageUrl}`} 
+                      alt="Barricade Evidence" 
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-sm font-semibold text-text-muted mb-2">After (Resolution by Crew)</p>
                 {complaint.resolutionImageUrl ? (

@@ -25,9 +25,11 @@ class ReportDetailScreen extends ConsumerStatefulWidget {
 
 class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
   File? _resolutionImage;
+  File? _barricadeImage;
   Position? _capturedPosition;
   String? _capturedAddress;
   bool _isResolving = false;
+  bool _isBarricading = false;
   int _ratingValue = 0;
   final _commentController = TextEditingController();
   bool _isRating = false;
@@ -90,6 +92,62 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
         _capturedPosition = null; // reset because gallery image doesn't have live geotag
         _capturedAddress = null;
       });
+    }
+  }
+
+  Future<void> _pickBarricadeImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: source,
+      imageQuality: 30,
+      maxWidth: 800,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _barricadeImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _markAsBarricaded() async {
+    if (_barricadeImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image showing the barricade')),
+      );
+      return;
+    }
+
+    final user = ref.read(authStateProvider).value;
+    if (user == null) return;
+
+    setState(() => _isBarricading = true);
+
+    try {
+      final repo = ref.read(complaintRepositoryProvider);
+      await repo.markAsBarricaded(
+        complaintId: widget.complaintId,
+        imageFile: _barricadeImage!,
+        userId: user.uid,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Barricade logged successfully!')),
+        );
+        setState(() {
+          _barricadeImage = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isBarricading = false);
+      }
     }
   }
 
@@ -341,6 +399,41 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                 ],
                 const SizedBox(height: 24),
                 
+                // --- Barricade Confirmation (Visible to All) ---
+                if (complaint.barricadeImageUrl != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green.shade200),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.check_circle_outline, color: Colors.green),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Area Secured (Temporary Barricade)',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _buildImage(complaint.barricadeImageUrl!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
                 // Images Section
                 Text('Evidence', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -493,6 +586,83 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   const SizedBox(height: 16),
                   Text('Crew Actions', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
+
+                  // --- Temporary Barricade Section ---
+                  if (complaint.barricadeImageUrl == null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        border: Border.all(color: Colors.orange.shade200),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Temporary Safety Barricade',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'If this is a high-risk area, please place a safety barricade and upload a photo to secure the area before proceeding.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_barricadeImage != null)
+                            Container(
+                              height: 100,
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(_barricadeImage!),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.camera_alt, size: 16),
+                                  label: const Text('Take Photo'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.orange.shade700,
+                                    side: BorderSide(color: Colors.orange.shade300),
+                                  ),
+                                  onPressed: () => _pickBarricadeImage(ImageSource.camera),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: _barricadeImage == null ? null : _markAsBarricaded,
+                                  child: _isBarricading
+                                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                      : const Text('Mark Secured'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   if (_resolutionImage != null)
                     Container(
                       height: 150,

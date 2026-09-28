@@ -20,6 +20,7 @@ export interface Complaint {
   description: string;
   imageUrl?: string; // Base64 string or URL
   resolutionImageUrl?: string; // Image uploaded when resolved
+  barricadeImageUrl?: string; // Temporary safety barricade image
   latitude: number;
   longitude: number;
   address: string;

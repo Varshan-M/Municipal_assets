@@ -35,6 +35,7 @@ class ComplaintModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? resolutionImageUrl;
+  final String? barricadeImageUrl;
   final int? rating;
   final String? ratingComment;
 
@@ -68,6 +69,7 @@ class ComplaintModel {
     required this.createdAt,
     required this.updatedAt,
     this.resolutionImageUrl,
+    this.barricadeImageUrl,
     this.rating,
     this.ratingComment,
   });
@@ -103,6 +105,7 @@ class ComplaintModel {
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       resolutionImageUrl: map['resolutionImageUrl'],
+      barricadeImageUrl: map['barricadeImageUrl'],
       rating: map['rating']?.toInt(),
       ratingComment: map['ratingComment'],
     );
@@ -138,6 +141,7 @@ class ComplaintModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'resolutionImageUrl': resolutionImageUrl,
+      'barricadeImageUrl': barricadeImageUrl,
       'rating': rating,
       'ratingComment': ratingComment,
     };
