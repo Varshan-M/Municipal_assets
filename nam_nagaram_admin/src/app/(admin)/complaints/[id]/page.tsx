@@ -7,7 +7,7 @@ import { doc, getDoc, collection, query, onSnapshot, writeBatch, serverTimestamp
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Complaint, User, TimelineEntry } from "@/types";
-import { ArrowLeft, User as UserIcon, MapPin, Camera, AlertTriangle, Clock, ShieldCheck, X, Cpu } from "lucide-react";
+import { ArrowLeft, User as UserIcon, MapPin, Camera, AlertTriangle, Clock, ShieldCheck, X, Cpu, Calendar, Route } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 import dynamic from 'next/dynamic';
@@ -304,7 +304,7 @@ export default function ComplaintDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-text-muted mb-1">Priority</p>
-                <p className="font-medium text-text">{complaint.priority || complaint.citizenPriority || 'Not set'}</p>
+                <p className="font-medium text-text">{complaint.aiPriorityLevel || complaint.priority || complaint.citizenPriority || 'Not set'}</p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-sm text-text-muted mb-1">Description</p>
@@ -314,6 +314,44 @@ export default function ComplaintDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* AI Workforce Scheduling Card */}
+          {complaint.schedulingStatus === 'Scheduled' && (
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="px-6 py-4 border-b border-indigo-100 bg-white/50 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-indigo-600" />
+                <h2 className="font-semibold text-indigo-900">AI Workforce Schedule & SLA</h2>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <p className="text-xs text-indigo-600/70 mb-1 font-semibold uppercase tracking-wider">Scheduled Date</p>
+                  <p className="font-bold text-indigo-950 text-lg">{complaint.scheduledDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-indigo-600/70 mb-1 font-semibold uppercase tracking-wider">Time Window</p>
+                  <p className="font-bold text-indigo-950 text-lg">{complaint.scheduledStartTime} - {complaint.expectedCompletionTime}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-indigo-600/70 mb-1 font-semibold uppercase tracking-wider flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> SLA Deadline
+                  </p>
+                  <p className="font-bold text-rose-600 text-lg">{complaint.slaHours} hours</p>
+                </div>
+                <div>
+                  <p className="text-xs text-indigo-600/70 mb-1 font-semibold uppercase tracking-wider flex items-center gap-1">
+                    <Route className="w-3 h-3" /> Distance & Time
+                  </p>
+                  <p className="font-bold text-indigo-950 text-lg">{complaint.travelDistance} km <span className="text-sm font-medium text-indigo-700">({complaint.estimatedTravelTime} mins)</span></p>
+                </div>
+                <div className="md:col-span-2 lg:col-span-4 bg-white/60 p-4 rounded-lg border border-indigo-100">
+                  <p className="text-xs text-indigo-600/70 mb-1 font-semibold uppercase tracking-wider">AI Scheduling Logic</p>
+                  <p className="text-indigo-900 font-medium">
+                    {complaint.aiPriorityReason}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Evidence */}
           <div className="bg-surface border border-gray-200 rounded-xl overflow-hidden shadow-sm">

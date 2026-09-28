@@ -45,6 +45,20 @@ export interface Complaint {
     confidence: number;
     analyzedAt: Timestamp;
   };
+  
+  // AI Scheduling Agent Fields
+  schedulingStatus?: 'Scheduled' | 'Unscheduled';
+  scheduledDate?: string;
+  scheduledStartTime?: string;
+  expectedCompletionTime?: string;
+  travelDistance?: number;
+  estimatedTravelTime?: number;
+  requiredSkill?: string;
+  estimatedRepairDuration?: number;
+  aiPriorityLevel?: string;
+  aiPriorityReason?: string;
+  slaHours?: number;
+  
   aiProcessed?: boolean;
   aiOverridden?: boolean;
 }

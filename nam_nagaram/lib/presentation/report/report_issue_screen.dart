@@ -7,7 +7,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/complaint_repository.dart';
+import '../../data/services/ai_verification_service.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/geotag_camera.dart';
 
 class ReportIssueScreen extends ConsumerStatefulWidget {
   const ReportIssueScreen({super.key});
@@ -27,6 +29,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   String _address = 'Fetching location...';
   final _descriptionController = TextEditingController();
   String _priority = 'Normal';
+  String? _watermarkedBase64;
   
   bool _isLoading = false;
   String? _errorMessage;
@@ -48,6 +51,24 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      // Use Custom Geotag Camera
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const GeotagCamera()),
+      );
+      
+      if (result != null && result is Map) {
+        setState(() {
+          _imageFile = result['file'];
+          _position = result['position'];
+          _address = result['address'];
+        });
+      }
+      return;
+    }
+
+    // Fallback to gallery
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: source,
@@ -112,6 +133,8 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     });
 
     try {
+      // AI Verification is now done in Step 2. 
+      // Step 2: Submit Complaint to Firestore
       final repo = ref.read(complaintRepositoryProvider);
       await repo.submitComplaint(
         userId: user.uid,
@@ -123,10 +146,11 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
         longitude: _position!.longitude,
         address: _address,
         citizenPriority: _priority,
+        watermarkedBase64: _watermarkedBase64,
       );
       
       if (mounted) {
-        context.pushReplacement('/my-reports');
+        context.go('/my-reports');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Report submitted successfully')),
         );
@@ -148,10 +172,62 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
       body: Stepper(
         type: StepperType.vertical,
         currentStep: _currentStep,
-        onStepContinue: () {
+        onStepContinue: () async {
           if (_currentStep == 0 && _selectedAsset == null) return;
           if (_currentStep == 1 && _selectedIssue == null) return;
-          if (_currentStep == 2 && _imageFile == null) return;
+          
+          // AI Verification Step
+          if (_currentStep == 2) {
+            if (_imageFile == null) return;
+            
+            setState(() {
+              _isLoading = true;
+              _errorMessage = null;
+            });
+            
+            // If we don't have location yet, fetch it so we can Geotag the photo
+            if (_position == null) {
+              setState(() {
+                _isLoading = true;
+                _errorMessage = "Fetching location for Geotagging...";
+              });
+              await _getLocation();
+              if (_position == null) {
+                 setState(() {
+                   _isLoading = false;
+                   _errorMessage = "Failed to get location. Please enable GPS.";
+                 });
+                 return;
+              }
+            }
+
+            final verificationResult = await aiVerificationService.verifyAssetImage(
+              _imageFile!,
+              _selectedAsset!,
+              _selectedIssue!,
+              latitude: _position!.latitude.toString(),
+              longitude: _position!.longitude.toString(),
+              address: _address,
+            );
+
+            setState(() {
+              _isLoading = false;
+            });
+
+            if (verificationResult['valid'] == false) {
+              setState(() {
+                _errorMessage = "${verificationResult['message']}";
+              });
+              // Stop here, don't advance to next step
+              return; 
+            } else {
+              setState(() {
+                _errorMessage = null;
+                _watermarkedBase64 = verificationResult['watermarked_base64'];
+              });
+            }
+          }
+          
           if (_currentStep == 3 && _position == null) {
             _getLocation();
             return;
@@ -254,6 +330,11 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                         fit: BoxFit.cover,
                       ),
                     ),
+                  ),
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ),
                 Row(
                   children: [

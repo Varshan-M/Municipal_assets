@@ -20,6 +20,26 @@ final currentUserProvider = FutureProvider<UserModel?>((ref) async {
   return ref.watch(authRepositoryProvider).getUserData(user.uid);
 });
 
+final teamDetailsProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null || user.teamId == null) return Stream.value(null);
+  return FirebaseFirestore.instance
+      .collection('crews')
+      .doc(user.teamId)
+      .snapshots()
+      .map((doc) => doc.exists ? {'id': doc.id, ...doc.data()!} : null);
+});
+
+final teamMembersProvider = StreamProvider<List<UserModel>>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null || user.teamId == null) return Stream.value([]);
+  return FirebaseFirestore.instance
+      .collection('users')
+      .where('teamId', isEqualTo: user.teamId)
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.data(), doc.id)).toList());
+});
+
 class AuthRepository {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
@@ -62,12 +82,31 @@ class AuthRepository {
     required String firstName,
     required String lastName,
     required String phoneNumber,
+    String role = 'citizen',
+    String? teamId,
+    String? teamName,
+    String? teamDomain,
   }) async {
     try {
       final credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      String? finalTeamId = teamId;
+
+      // If they are registering a new team, create the team document first
+      if (role == 'maintenance' && teamName != null && teamDomain != null) {
+        final crewRef = _firestore.collection('crews').doc();
+        await crewRef.set({
+          'name': teamName,
+          'skills': [teamDomain],
+          'isOnline': true,
+          'latitude': 11.2200, // Default mock coordinate
+          'longitude': 78.1650, // Default mock coordinate
+        });
+        finalTeamId = crewRef.id;
+      }
 
       final user = UserModel(
         id: credential.user!.uid,
@@ -76,7 +115,8 @@ class AuthRepository {
         email: email,
         phoneNumber: phoneNumber,
         phoneVerified: true, // Temporarily bypassed OTP
-        role: 'citizen',
+        role: role,
+        teamId: finalTeamId,
         createdAt: DateTime.now(),
       );
 
@@ -142,6 +182,15 @@ class AuthRepository {
       }
     } catch (e) {
       throw Exception('Failed to link phone: $e');
+    }
+  }
+
+  Future<void> updateProfilePicture(String base64Image) async {
+    final user = _firebaseAuth.currentUser;
+    if (user != null) {
+      await _firestore.collection('users').doc(user.uid).update({
+        'profilePictureBase64': base64Image,
+      });
     }
   }
 }

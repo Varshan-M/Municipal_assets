@@ -8,6 +8,8 @@ class UserModel {
   final String phoneNumber;
   final bool phoneVerified;
   final String role; // 'citizen', 'admin', 'maintenance'
+  final String? teamId; // e.g., 'team_alpha' for maintenance role
+  final String? profilePictureBase64;
   final DateTime createdAt;
 
   UserModel({
@@ -18,6 +20,8 @@ class UserModel {
     required this.phoneNumber,
     this.phoneVerified = false,
     this.role = 'citizen',
+    this.teamId,
+    this.profilePictureBase64,
     required this.createdAt,
   });
 
@@ -30,6 +34,8 @@ class UserModel {
       phoneNumber: map['phoneNumber'] ?? '',
       phoneVerified: map['phoneVerified'] ?? false,
       role: map['role'] ?? 'citizen',
+      teamId: map['teamId'],
+      profilePictureBase64: map['profilePictureBase64'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -42,6 +48,8 @@ class UserModel {
       'phoneNumber': phoneNumber,
       'phoneVerified': phoneVerified,
       'role': role,
+      'teamId': teamId,
+      if (profilePictureBase64 != null) 'profilePictureBase64': profilePictureBase64,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
@@ -51,6 +59,7 @@ class UserModel {
     String? lastName,
     String? phoneNumber,
     bool? phoneVerified,
+    String? profilePictureBase64,
   }) {
     return UserModel(
       id: id,
@@ -60,6 +69,8 @@ class UserModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       role: role,
+      teamId: teamId,
+      profilePictureBase64: profilePictureBase64 ?? this.profilePictureBase64,
       createdAt: createdAt,
     );
   }

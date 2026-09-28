@@ -238,7 +238,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   const SizedBox(height: 4),
                   Text(complaint.description, style: theme.textTheme.bodyMedium),
                 ],
-                if (complaint.aiPriorityLevel != null && complaint.aiPriorityReason != null) ...[
+                if (complaint.aiPriorityReason != null) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -254,7 +254,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                           children: [
                             Icon(Icons.psychology, size: 16, color: theme.colorScheme.primary),
                             const SizedBox(width: 8),
-                            Text('AI Priority Assessment', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                            Text('AI Assessment', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
                           ],
                         ),
                         const SizedBox(height: 4),

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../data/models/complaint_model.dart';
 import '../../data/repositories/complaint_repository.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/priority_badge.dart';
+import '../../data/repositories/auth_repository.dart';
 
 class MyReportsScreen extends ConsumerStatefulWidget {
   const MyReportsScreen({super.key});
@@ -18,11 +20,26 @@ class _MyReportsScreenState extends ConsumerState<MyReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final complaintsAsync = ref.watch(userComplaintsProvider);
+    final userAsync = ref.watch(currentUserProvider);
+    final isMaintenance = userAsync.value?.role == 'maintenance';
+    final complaintsAsync = isMaintenance 
+        ? ref.watch(teamComplaintsProvider) 
+        : ref.watch(userComplaintsProvider);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          context.go('/home');
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
-        title: const Text('My Reports'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
+        title: Text(isMaintenance ? 'My Tasks' : 'My Reports'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Padding(
@@ -61,9 +78,9 @@ class _MyReportsScreenState extends ConsumerState<MyReportsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.assignment_outlined, size: 64, color: Theme.of(context).disabledColor),
+                  Icon(isMaintenance ? Icons.assignment_turned_in_outlined : Icons.assignment_outlined, size: 64, color: Theme.of(context).disabledColor),
                   const SizedBox(height: 16),
-                  Text('No reports found', style: Theme.of(context).textTheme.titleLarge),
+                  Text(isMaintenance ? 'No tasks assigned' : 'No reports found', style: Theme.of(context).textTheme.titleLarge),
                 ],
               ),
             );
@@ -121,7 +138,13 @@ class _MyReportsScreenState extends ConsumerState<MyReportsScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            StatusBadge(status: complaint.status),
+                            Row(
+                              children: [
+                                StatusBadge(status: complaint.status),
+                                const SizedBox(width: 8),
+                                PriorityBadge(priority: complaint.aiPriorityLevel),
+                              ],
+                            ),
                             if (complaint.citizenPriority == 'Critical' || complaint.citizenPriority == 'Urgent')
                               Row(
                                 children: [
@@ -153,6 +176,7 @@ class _MyReportsScreenState extends ConsumerState<MyReportsScreen> {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
+      ),
       ),
     );
   }

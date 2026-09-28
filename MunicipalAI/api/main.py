@@ -10,6 +10,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from api.agent_worker import start_listening
 from api.mqtt_worker import start_mqtt_worker
+from api.supervisor_agent import start_supervisor_worker
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 import tensorflow as tf
@@ -97,6 +98,9 @@ def load_model_on_startup():
     print("Starting IoT Surface Monitoring MQTT Daemon...")
     mqtt_thread = threading.Thread(target=start_mqtt_worker, daemon=True)
     mqtt_thread.start()
+
+    print("Starting Supervisor Agent...")
+    start_supervisor_worker()
 
 @app.post("/verify-image")
 async def verify_image(

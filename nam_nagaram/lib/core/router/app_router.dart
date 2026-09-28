@@ -10,17 +10,26 @@ import '../../presentation/home/my_reports_screen.dart';
 import '../../presentation/report/report_issue_screen.dart';
 import '../../presentation/timeline/report_detail_screen.dart';
 import '../../presentation/profile/profile_screen.dart';
-import '../../presentation/profile/notifications_screen.dart';
+import '../../presentation/home/analytics_screen.dart';
+import '../../presentation/splash/splash_screen.dart';
+import '../../presentation/home/main_layout_screen.dart';
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
   final currentUserAsync = ref.watch(currentUserProvider);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     routes: [
       GoRoute(
         path: '/',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/auth-check',
         builder: (context, state) {
           // Auth flow decision logic
           return authState.when(
@@ -29,19 +38,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return const SignInScreen();
               }
               
-              // We have a firebase user, check if we have full user data and if phone is verified
+              // We have a firebase user, check if we have full user data
               return currentUserAsync.when(
                 data: (userData) {
                   if (userData == null) {
+                    // If user document is missing in Firestore, sign them out and redirect to login
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      ref.read(authRepositoryProvider).signOut();
+                      context.go('/login');
+                    });
                     return const Scaffold(body: Center(child: CircularProgressIndicator()));
                   }
                   
-                  // OTP bypassed
-                  // if (!userData.phoneVerified) {
-                  //   return OtpVerificationScreen(phoneNumber: userData.phoneNumber);
-                  // }
-                  
-                  return const HomeScreen();
+                  // Redirect to home if logged in
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    context.go('/home');
+                  });
+                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
                 },
                 loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
                 error: (e, st) => Scaffold(body: Center(child: Text('Error loading user data: $e'))),
@@ -67,17 +80,49 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           return OtpVerificationScreen(phoneNumber: phone);
         },
       ),
-      GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomeScreen(),
+      // Stateful shell route for persistent bottom navigation bar
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainLayoutScreen(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/my-reports',
+                builder: (context, state) => const MyReportsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/analytics',
+                builder: (context, state) => const AnalyticsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: '/report',
         builder: (context, state) => const ReportIssueScreen(),
-      ),
-      GoRoute(
-        path: '/my-reports',
-        builder: (context, state) => const MyReportsScreen(),
       ),
       GoRoute(
         path: '/report-detail/:id',
@@ -85,14 +130,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           return ReportDetailScreen(complaintId: id);
         },
-      ),
-      GoRoute(
-        path: '/notifications',
-        builder: (context, state) => const NotificationsScreen(),
-      ),
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
       ),
     ],
   );

@@ -76,7 +76,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Welcome to CivicCare',
+                    'Welcome to NAM NAGARAM',
                     style: theme.textTheme.displaySmall,
                     textAlign: TextAlign.center,
                   ),

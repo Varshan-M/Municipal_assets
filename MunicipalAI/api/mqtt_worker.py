@@ -3,6 +3,7 @@ import json
 import time
 import threading
 import uuid
+import logging
 import paho.mqtt.client as mqtt
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -109,14 +110,18 @@ def generate_complaint(device_id, distance_cm):
 # 4. MQTT CALLBACKS
 # ==========================================
 def on_connect(client, userdata, flags, reason_code, properties):
-    if reason_code == 0:
+    if not reason_code.is_failure:
         print(f"[MQTT Worker] Connected securely to MQTT Broker!")
-        client.subscribe(TOPIC)
-        print(f"[MQTT Worker] Subscribed to topic: {TOPIC}")
+        client.subscribe(TOPIC, qos=1)
+        print(f"[MQTT Worker] Subscribed to topic: {TOPIC} with QoS 1")
     else:
         print(f"[MQTT Worker] Failed to connect, return code {reason_code}")
 
+def on_disconnect(client, userdata, flags, reason_code, properties):
+    print(f"[MQTT Worker] Disconnected from broker! Reason: {reason_code}")
+
 def on_message(client, userdata, msg):
+    print(f"[MQTT Worker] RAW MESSAGE RECEIVED on {msg.topic}: {msg.payload}")
     try:
         payload = msg.payload.decode('utf-8')
         data = json.loads(payload)
@@ -156,12 +161,19 @@ def on_message(client, userdata, msg):
 def start_mqtt_worker():
     print("[MQTT Worker] Starting Persistent MQTT Daemon...")
     
-    # Enable TLS for secure connection
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.tls_set() # Uses default system certs
-    client.username_pw_set(MQTT_USER, MQTT_PASS)
+    
+    # Enable paho-mqtt logging to stdout
+    logging.basicConfig(level=logging.DEBUG)
+    client.enable_logger()
+    
+    if MQTT_PORT == 8883:
+        client.tls_set() # Uses default system certs
+    if MQTT_USER and MQTT_PASS:
+        client.username_pw_set(MQTT_USER, MQTT_PASS)
     
     client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
     
     try:

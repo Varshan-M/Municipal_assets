@@ -94,6 +94,31 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+def check_for_duplicates(complaint_id, asset_type, issue_type, complaint_lat, complaint_lng):
+    if complaint_lat is None or complaint_lng is None:
+        return None
+        
+    try:
+        active_statuses = ['Submitted', 'Team Assigned', 'In Progress']
+        docs = db.collection('complaints').where('assetType', '==', asset_type).where('issueType', '==', issue_type).where('status', 'in', active_statuses).stream()
+                 
+        for doc in docs:
+            if doc.id == complaint_id:
+                continue
+                
+            data = doc.to_dict()
+            other_lat = data.get('latitude')
+            other_lng = data.get('longitude')
+            
+            if other_lat is not None and other_lng is not None:
+                dist = calculate_distance(complaint_lat, complaint_lng, other_lat, other_lng)
+                if dist < 0.05: # Within 50 meters
+                    return doc.id
+    except Exception as e:
+        print(f"Error checking for duplicates: {e}")
+        
+    return None
+
 def evaluate_priority(asset_type, issue_type, description, address, citizen_priority):
     prompt = f"""
     You are an AI Priority Assessment Agent for a Municipal Corporation.
@@ -475,6 +500,57 @@ def on_snapshot(doc_snapshot, changes, read_time):
                 citizen_priority = data.get('citizenPriority', 'Normal')
                 complaint_lat = data.get('latitude')
                 complaint_lng = data.get('longitude')
+                
+                # --- PHASE 0: Deduplication Agent ---
+                duplicate_of = check_for_duplicates(complaint_id, asset_type, issue_type, complaint_lat, complaint_lng)
+                if duplicate_of:
+                    print(f"[*] Detected DUPLICATE for {complaint_id}. It is a duplicate of {duplicate_of}")
+                    
+                    db.collection('complaints').document(complaint_id).update({
+                        'status': 'Rejected',
+                        'aiPriorityReason': f'Auto-rejected: Duplicate of an existing active complaint.',
+                        'updatedAt': firestore.SERVER_TIMESTAMP
+                    })
+                    
+                    timeline_ref = db.collection('complaints').document(complaint_id).collection('timeline')
+                    timeline_id = str(uuid.uuid4())
+                    timeline_ref.document(timeline_id).set({
+                        'id': timeline_id,
+                        'status': 'Rejected',
+                        'message': 'AI Agent: Identified as a duplicate of an existing active complaint.',
+                        'timestamp': firestore.SERVER_TIMESTAMP,
+                        'updatedBy': 'AI_Agent',
+                        'isAiGenerated': True
+                    })
+                    
+                    log_ai_action('DEDUPLICATION', complaint_id, f"Auto-rejected as a duplicate of {duplicate_of}")
+                    
+                    user_id = data.get('userId')
+                    if user_id:
+                        from firebase_admin import messaging
+                        try:
+                            msg = messaging.Message(
+                                notification=messaging.Notification(
+                                    title='Duplicate Report',
+                                    body=f'Your report for {asset_type} was identified as a duplicate of an already active issue.'
+                                ),
+                                data={'complaintId': complaint_id},
+                                topic=f'user_{user_id}'
+                            )
+                            messaging.send(msg)
+                            
+                            db.collection('notifications').document().set({
+                                'userId': user_id,
+                                'title': 'Duplicate Report',
+                                'body': f'Your report for {asset_type} was identified as a duplicate of an already active issue.',
+                                'createdAt': firestore.SERVER_TIMESTAMP,
+                                'read': False,
+                                'complaintId': complaint_id
+                            })
+                        except Exception as e:
+                            print(f"    - Error sending duplicate notification: {e}")
+                            
+                    continue # Halt further processing
                 
                 # --- PHASE 1: Priority Agent ---
                 priority_level = data.get('aiPriorityLevel')
