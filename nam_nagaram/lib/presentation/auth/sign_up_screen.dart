@@ -233,7 +233,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    value: _selectedTeamId,
+                    initialValue: _selectedTeamId,
                     hint: const Text('Select a team'),
                     items: _teams.isEmpty 
                       ? [const DropdownMenuItem<String>(value: '', child: Text('Loading teams...'))]
