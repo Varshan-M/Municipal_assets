@@ -15,6 +15,9 @@ export default function AnalyticsPage() {
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Time Filter State
+  const [timeFilter, setTimeFilter] = useState<"week" | "month" | "year" | "all">("all");
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -43,9 +46,6 @@ export default function AnalyticsPage() {
       </div>
     );
   }
-
-  // Time Filter State
-  const [timeFilter, setTimeFilter] = useState<"week" | "month" | "year" | "all">("all");
 
   // Calculate KPIs
   const filteredComplaints = complaints.filter(c => {
