@@ -9,6 +9,7 @@ import uuid
 import firebase_admin
 from firebase_admin import credentials, firestore
 from api.agent_worker import start_listening
+from api.mqtt_worker import start_mqtt_worker
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 import tensorflow as tf
@@ -92,6 +93,10 @@ def load_model_on_startup():
     print("Starting Automated Follow-up Agent in background...")
     agent_thread = threading.Thread(target=start_listening, daemon=True)
     agent_thread.start()
+    
+    print("Starting IoT Surface Monitoring MQTT Daemon...")
+    mqtt_thread = threading.Thread(target=start_mqtt_worker, daemon=True)
+    mqtt_thread.start()
 
 @app.post("/verify-image")
 async def verify_image(
