@@ -38,11 +38,6 @@ export default function Header() {
             className="pl-9 pr-4 py-1.5 bg-gray-100 border-transparent rounded-full text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 transition-all w-64"
           />
         </div>
-
-        <button className="relative p-2 text-text-muted hover:bg-gray-100 rounded-full transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-        </button>
       </div>
     </header>
   );

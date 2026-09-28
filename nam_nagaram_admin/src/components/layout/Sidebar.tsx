@@ -25,7 +25,6 @@ const navItems = [
   { name: "Teams", href: "/teams", icon: Users },
   { name: "AI Agents", href: "/ai-agents", icon: Bot },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
-  { name: "Notifications", href: "/notifications", icon: Bell },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
