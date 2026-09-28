@@ -74,17 +74,8 @@ export default function DashboardPage() {
       setLoading(false);
       setErrorMsg(null);
 
-      // Auto-trigger AI processing for any new complaints
-      if (adminUser && unprocessedComplaints.length > 0) {
-        for (const complaint of unprocessedComplaints) {
-          try {
-            await processComplaintWorkflow(complaint, adminUser.uid);
-            console.log(`Processed complaint ${complaint.id} via AI Engine`);
-          } catch (e) {
-            console.error(`Failed to process complaint ${complaint.id}:`, e);
-          }
-        }
-      }
+      // Auto-trigger AI processing for any new complaints is DISABLED
+      // because agent_worker.py (Python backend) handles all AI processing now.
 
     }, (error) => {
       console.error("Error fetching complaints:", error);
