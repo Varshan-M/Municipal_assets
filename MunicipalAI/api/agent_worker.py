@@ -145,79 +145,110 @@ def evaluate_priority(asset_type, issue_type, description, address, citizen_prio
         print(f"Error evaluating priority with Gemini: {e}")
         return {"level": "Medium", "reason": "Standard priority assigned automatically due to high traffic.", "sla_hours": 72}
 
-def generate_crew_assignment(asset_type, issue_type, address, complaint_lat, complaint_lng, priority_level, sla_hours):
-    # Fetch live crews and calculate their current active workloads
+def generate_crew_schedule(asset_type, issue_type, address, complaint_lat, complaint_lng, priority_level, sla_hours, complaint_id):
     try:
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        sla_deadline = now + timedelta(hours=sla_hours)
+        
         crews_ref = db.collection('crews').stream()
-        crew_list_text = ""
-        crew_map = {}
+        crew_data_list = []
         
         for crew in crews_ref:
             data = crew.to_dict()
-            # TEMPORARILY DISABLED FOR SINGLE-DEVICE TESTING:
-            # if not data.get('isOnline'):
-            #     continue
-                
             crew_name = data.get('name', crew.id)
-            crew_map[crew_name] = crew.id
-            skills = ", ".join(data.get('skills', []))
+            
+            # Fetch active tasks to calculate Existing Schedule and Workload
+            tasks_ref = db.collection('complaints').where('assignedTeamId', '==', crew.id).where('status', 'in', ['Team Assigned', 'In Progress']).stream()
+            
+            active_tasks = []
+            for t in tasks_ref:
+                t_data = t.to_dict()
+                active_tasks.append({
+                    "id": t.id,
+                    "scheduledStartTime": t_data.get('scheduledStartTime'),
+                    "expectedCompletionTime": t_data.get('expectedCompletionTime'),
+                    "duration": t_data.get('estimatedRepairDuration')
+                })
+            
             crew_lat = data.get('latitude')
             crew_lng = data.get('longitude')
-            
-            # Count active tasks for this crew
-            active_tasks = 0
-            tasks_ref = db.collection('complaints').where('assignedTeamId', '==', crew.id).where('status', 'in', ['Team Assigned', 'In Progress']).stream()
-            active_tasks = len(list(tasks_ref))
-            
+            dist = 0
+            travel_time_mins = 0
             if crew_lat is not None and crew_lng is not None and complaint_lat is not None and complaint_lng is not None:
                 dist = calculate_distance(complaint_lat, complaint_lng, crew_lat, crew_lng)
-                crew_list_text += f"- {crew_name} (Skills: {skills}) | Distance: {dist:.1f} km | Active Tasks: {active_tasks}\n"
-            else:
-                crew_list_text += f"- {crew_name} (Skills: {skills}) | Distance: Unknown | Active Tasks: {active_tasks}\n"
+                travel_time_mins = int((dist / 30.0) * 60) # Assume 30 km/h average speed
                 
-        if not crew_list_text:
-            return None, "Pending Manual Assignment"
-    except Exception as e:
-        print(f"Error fetching live crews: {e}")
-        return None, "Pending Manual Assignment"
+            crew_data_list.append({
+                "id": crew.id,
+                "name": crew_name,
+                "skills": data.get('skills', []),
+                "workingHours": data.get('workingHours', {"start": "08:00", "end": "18:00"}),
+                "distance_km": round(dist, 1),
+                "estimatedTravelTimeMins": travel_time_mins,
+                "activeTasksCount": len(active_tasks),
+                "existingSchedule": active_tasks
+            })
+            
+        prompt = f"""
+You are the Municipal Workforce Scheduling Agent.
+Your objective is to evaluate the 7 Scheduling Factors (Skill, Availability, Workload, SLA Deadline, Travel Time, Existing Schedule, Time Window) and decide exactly WHO handles this issue and WHEN.
 
-    prompt = f"""
-    You are an Intelligent Workforce Scheduling Agent.
-    A new complaint has been prioritized and needs to be assigned to the most appropriate crew.
-    
-    Issue Details:
-    - Priority Level: {priority_level} (SLA Deadline: {sla_hours} hours)
-    - Asset Type: {asset_type}
-    - Issue Type: {issue_type}
-    - Location: {address}
-    
-    Available Teams (Live Workload & Location):
-    {crew_list_text}
-    
-    Analyze the issue and assign the best team. 
-    Crucial Logic: You must balance the workload. Do NOT assign to a team if they have many active tasks compared to others, even if they are slightly closer. Prioritize skills first, workload second, distance third.
-    
-    Return ONLY the exact name of the assigned team. No other text.
-    """
-    
-    try:
+Issue Details:
+- Asset Type: {asset_type}
+- Issue Type: {issue_type}
+- Location: {address}
+- Priority: {priority_level}
+- SLA Deadline: {sla_deadline.strftime('%Y-%m-%d %H:%M:%S')}
+- Current Time: {now.strftime('%Y-%m-%d %H:%M:%S')}
+
+Available Crews:
+{json.dumps(crew_data_list, indent=2)}
+
+Instructions:
+1. Identify the 'requiredSkill' based on the Issue Type (e.g. 'Electrical', 'Road', 'Plumbing').
+2. Estimate the 'repairDurationMins' (e.g., small pothole=60, street light=45).
+3. Select the best crew that has the required skill, considering their Working Hours, Distance, and Existing Workload.
+4. Generate a 'scheduledDate' (YYYY-MM-DD), 'scheduledStartTime' (HH:MM), and 'expectedCompletionTime' (HH:MM) that fits within their Working Hours, does NOT overlap their 'existingSchedule', accounts for 'estimatedTravelTimeMins', and finishes BEFORE the SLA Deadline.
+
+Return ONLY a valid JSON object with the following keys:
+"assignedTeamId": (String)
+"assignedTeamName": (String)
+"requiredSkill": (String)
+"estimatedRepairDurationMins": (Integer)
+"scheduledDate": (YYYY-MM-DD)
+"scheduledStartTime": (HH:MM)
+"expectedCompletionTime": (HH:MM)
+"travelDistanceKm": (Float)
+"travelTimeMins": (Integer)
+"reason": (1-sentence explanation of why this crew and time slot was chosen)
+"""
         response = model.generate_content(prompt)
-        assigned_team = response.text.strip()
+        text = response.text.replace("```json", "").replace("```", "").strip()
+        result = json.loads(text)
         
-        # Fallback just in case Gemini gets chatty
-        for name, doc_id in crew_map.items():
-            if name.lower() in assigned_team.lower():
-                return doc_id, name
-                
-        # If perfect match fails, just return the first available
-        first_name = list(crew_map.keys())[0] if crew_map else "Pending Manual Assignment"
-        first_id = crew_map[first_name] if crew_map else None
-        return first_id, first_name
+        return result
+        
     except Exception as e:
-        print(f"Error assigning team with Gemini: {e}")
-        first_name = list(crew_map.keys())[0] if crew_map else "Pending Manual Assignment"
-        first_id = crew_map[first_name] if crew_map else None
-        return first_id, first_name
+        print(f"Error generating schedule with Gemini: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback
+        now = datetime.now()
+        first_crew_id = crew_data_list[0]['id'] if 'crew_data_list' in locals() and crew_data_list else "team_alpha"
+        first_crew_name = crew_data_list[0]['name'] if 'crew_data_list' in locals() and crew_data_list else "Civil Works Team (Alpha)"
+        return {
+            "assignedTeamId": first_crew_id,
+            "assignedTeamName": first_crew_name,
+            "requiredSkill": "General",
+            "estimatedRepairDurationMins": 60,
+            "scheduledDate": now.strftime("%Y-%m-%d"),
+            "scheduledStartTime": (now + timedelta(hours=1)).strftime("%H:%M"),
+            "expectedCompletionTime": (now + timedelta(hours=2)).strftime("%H:%M"),
+            "travelDistanceKm": 5.0,
+            "travelTimeMins": 15,
+            "reason": "Fallback assignment due to AI error."
+        }
 
 def log_ai_action(action_type, target_id, message):
     try:
@@ -465,15 +496,18 @@ def on_snapshot(doc_snapshot, changes, read_time):
                 
                 # --- PHASE 2: Intelligent Scheduling Agent ---
                 print(f"    - Running Intelligent Scheduling Agent for {complaint_id}...")
-                assigned_team_id, assigned_team_name = generate_crew_assignment(
-                    asset_type, issue_type, address, complaint_lat, complaint_lng, priority_level, sla_hours
+                schedule_result = generate_crew_schedule(
+                    asset_type, issue_type, address, complaint_lat, complaint_lng, priority_level, sla_hours, complaint_id
                 )
+                
+                assigned_team_id = schedule_result.get('assignedTeamId')
+                assigned_team_name = schedule_result.get('assignedTeamName')
                 
                 if not assigned_team_id:
                     print(f"    - No teams available to schedule.")
                     continue
                     
-                print(f"    - Scheduled to Team: {assigned_team_name} (ID: {assigned_team_id})")
+                print(f"    - Scheduled to Team: {assigned_team_name} (ID: {assigned_team_id}) at {schedule_result.get('scheduledStartTime')}")
                 
                 # Update Firestore with assignment
                 try:
@@ -481,7 +515,7 @@ def on_snapshot(doc_snapshot, changes, read_time):
                     timeline_ref = db.collection('complaints').document(complaint_id).collection('timeline')
                     timeline_id = str(uuid.uuid4())
                     
-                    timeline_message = f"AI Priority Assessment: {priority_level} (SLA: {sla_hours}h). Issue has been intelligently scheduled to {assigned_team_name} based on workload and proximity."
+                    timeline_message = f"AI Scheduling Agent: Scheduled to {assigned_team_name} for {schedule_result.get('scheduledDate')} at {schedule_result.get('scheduledStartTime')}. Reason: {schedule_result.get('reason')}"
                     
                     timeline_ref.document(timeline_id).set({
                         'id': timeline_id,
@@ -493,13 +527,29 @@ def on_snapshot(doc_snapshot, changes, read_time):
                     })
                     
                     # 2. Update complaint status and team
-                    db.collection('complaints').document(complaint_id).update({
+                    update_data = {
                         'status': 'Team Assigned',
                         'assignedTeamId': assigned_team_id,
-                        'assignedTeamName': assigned_team_name
-                    })
+                        'assignedTeamName': assigned_team_name,
+                        'requiredSkill': schedule_result.get('requiredSkill'),
+                        'estimatedRepairDuration': schedule_result.get('estimatedRepairDurationMins'),
+                        'scheduledDate': schedule_result.get('scheduledDate'),
+                        'scheduledStartTime': schedule_result.get('scheduledStartTime'),
+                        'expectedCompletionTime': schedule_result.get('expectedCompletionTime'),
+                        'travelDistance': schedule_result.get('travelDistanceKm'),
+                        'estimatedTravelTime': schedule_result.get('travelTimeMins'),
+                        'schedulingStatus': 'Scheduled'
+                    }
                     
-                    log_ai_action('SMART_SCHEDULE', complaint_id, f"Intelligently scheduled to {assigned_team_name}.")
+                    # Include priority data if it was just calculated
+                    if priority_level:
+                        update_data['aiPriorityLevel'] = priority_level
+                        update_data['aiPriorityReason'] = priority_reason
+                        update_data['slaHours'] = sla_hours
+                        
+                    db.collection('complaints').document(complaint_id).update(update_data)
+                    
+                    log_ai_action('SMART_SCHEDULE', complaint_id, f"Intelligently scheduled to {assigned_team_name} at {schedule_result.get('scheduledStartTime')}.")
                     print(f"    - Successfully scheduled {assigned_team_name} and updated timeline for {complaint_id}")
                     
                     from firebase_admin import messaging
