@@ -16,12 +16,27 @@ class ComplaintModel {
   final String? aiCategory;
   final String? aiSeverity;
   final double? aiConfidence;
+  final String? aiPriorityLevel;
+  final String? aiPriorityReason;
+  final int? slaHours;
+  
+  // AI Scheduling Agent fields
+  final String? schedulingStatus;
+  final String? scheduledDate;
+  final String? scheduledStartTime;
+  final String? expectedCompletionTime;
+  final num? travelDistance;
+  final int? estimatedTravelTime;
+  final String? requiredSkill;
+  final int? estimatedRepairDuration;
   
   final String status; // 'Submitted', 'Under Review', 'AI Analysed', 'Verified', 'Team Assigned', 'Work In Progress', 'Resolved', 'Rejected', 'Duplicate'
   final String? assignedTeamId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? resolutionImageUrl;
+  final int? rating;
+  final String? ratingComment;
 
   ComplaintModel({
     required this.id,
@@ -37,11 +52,24 @@ class ComplaintModel {
     this.aiCategory,
     this.aiSeverity,
     this.aiConfidence,
+    this.aiPriorityLevel,
+    this.aiPriorityReason,
+    this.slaHours,
+    this.schedulingStatus,
+    this.scheduledDate,
+    this.scheduledStartTime,
+    this.expectedCompletionTime,
+    this.travelDistance,
+    this.estimatedTravelTime,
+    this.requiredSkill,
+    this.estimatedRepairDuration,
     this.status = 'Submitted',
     this.assignedTeamId,
     required this.createdAt,
     required this.updatedAt,
     this.resolutionImageUrl,
+    this.rating,
+    this.ratingComment,
   });
 
   factory ComplaintModel.fromMap(Map<String, dynamic> map, String id) {
@@ -59,11 +87,24 @@ class ComplaintModel {
       aiCategory: map['aiCategory'],
       aiSeverity: map['aiSeverity'],
       aiConfidence: map['aiConfidence']?.toDouble(),
+      aiPriorityLevel: map['aiPriorityLevel'],
+      aiPriorityReason: map['aiPriorityReason'],
+      slaHours: map['slaHours']?.toInt(),
+      schedulingStatus: map['schedulingStatus'],
+      scheduledDate: map['scheduledDate'],
+      scheduledStartTime: map['scheduledStartTime'],
+      expectedCompletionTime: map['expectedCompletionTime'],
+      travelDistance: map['travelDistance'] as num?,
+      estimatedTravelTime: map['estimatedTravelTime']?.toInt(),
+      requiredSkill: map['requiredSkill'],
+      estimatedRepairDuration: map['estimatedRepairDuration']?.toInt(),
       status: map['status'] ?? 'Submitted',
       assignedTeamId: map['assignedTeamId'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       resolutionImageUrl: map['resolutionImageUrl'],
+      rating: map['rating']?.toInt(),
+      ratingComment: map['ratingComment'],
     );
   }
 
@@ -81,11 +122,24 @@ class ComplaintModel {
       'aiCategory': aiCategory,
       'aiSeverity': aiSeverity,
       'aiConfidence': aiConfidence,
+      'aiPriorityLevel': aiPriorityLevel,
+      'aiPriorityReason': aiPriorityReason,
+      'slaHours': slaHours,
+      'schedulingStatus': schedulingStatus,
+      'scheduledDate': scheduledDate,
+      'scheduledStartTime': scheduledStartTime,
+      'expectedCompletionTime': expectedCompletionTime,
+      'travelDistance': travelDistance,
+      'estimatedTravelTime': estimatedTravelTime,
+      'requiredSkill': requiredSkill,
+      'estimatedRepairDuration': estimatedRepairDuration,
       'status': status,
       'assignedTeamId': assignedTeamId,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'resolutionImageUrl': resolutionImageUrl,
+      'rating': rating,
+      'ratingComment': ratingComment,
     };
   }
 }

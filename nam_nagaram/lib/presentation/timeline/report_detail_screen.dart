@@ -1,20 +1,189 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../data/repositories/complaint_repository.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../widgets/status_badge.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import '../widgets/primary_button.dart';
+import '../widgets/geotag_camera.dart';
+import '../widgets/priority_badge.dart';
 
-class ReportDetailScreen extends ConsumerWidget {
+class ReportDetailScreen extends ConsumerStatefulWidget {
   final String complaintId;
 
   const ReportDetailScreen({super.key, required this.complaintId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final complaintAsync = ref.watch(complaintRepositoryProvider).getComplaint(complaintId);
-    final timelineAsync = ref.watch(complaintTimelineProvider(complaintId));
+  ConsumerState<ReportDetailScreen> createState() => _ReportDetailScreenState();
+}
+
+class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
+  File? _resolutionImage;
+  Position? _capturedPosition;
+  String? _capturedAddress;
+  bool _isResolving = false;
+  int _ratingValue = 0;
+  final _commentController = TextEditingController();
+  bool _isRating = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitRating(String? teamId) async {
+    if (_ratingValue == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a star rating')));
+      return;
+    }
+    setState(() => _isRating = true);
+    try {
+      await ref.read(complaintRepositoryProvider).submitRating(
+        complaintId: widget.complaintId,
+        rating: _ratingValue,
+        comment: _commentController.text,
+        assignedTeamId: teamId,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rating submitted successfully!')));
+      }
+    } catch(e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isRating = false);
+    }
+  }
+
+  Future<void> _pickResolutionImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const GeotagCamera()),
+      );
+      
+      if (result != null && result is Map) {
+        setState(() {
+          _resolutionImage = result['file'];
+          _capturedPosition = result['position'];
+          _capturedAddress = result['address'];
+        });
+      }
+      return;
+    }
+
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: source,
+      imageQuality: 30,
+      maxWidth: 800,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _resolutionImage = File(pickedFile.path);
+        _capturedPosition = null; // reset because gallery image doesn't have live geotag
+        _capturedAddress = null;
+      });
+    }
+  }
+
+  Future<void> _markAsResolved(String assetType) async {
+    if (_resolutionImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image to prove resolution')),
+      );
+      return;
+    }
+
+    final user = ref.read(authStateProvider).value;
+    if (user == null) return;
+
+    setState(() => _isResolving = true);
+
+    try {
+      double latitude = 0.0;
+      double longitude = 0.0;
+      String address = 'Unknown Location';
+
+      // 1. If we got location from GeotagCamera, use it instantly!
+      if (_capturedPosition != null) {
+        latitude = _capturedPosition!.latitude;
+        longitude = _capturedPosition!.longitude;
+        address = _capturedAddress ?? 'Unknown Location';
+      } else {
+        // Otherwise, fetch it (e.g. they uploaded from gallery)
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) throw Exception('Location services are disabled.');
+
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            throw Exception('Location permissions are denied');
+          }
+        }
+        if (permission == LocationPermission.deniedForever) {
+          throw Exception('Location permissions are permanently denied.');
+        }
+
+        final position = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium));
+        latitude = position.latitude;
+        longitude = position.longitude;
+        
+        try {
+          List<Placemark> placemarks = await Geocoding().placemarkFromCoordinates(latitude, longitude);
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+            address = '${place.street}, ${place.subLocality}, ${place.locality}';
+          }
+        } catch (e) {
+          // ignore geocoding errors
+        }
+      }
+
+      final repo = ref.read(complaintRepositoryProvider);
+      await repo.resolveComplaint(
+        complaintId: widget.complaintId,
+        assetType: assetType,
+        imageFile: _resolutionImage!,
+        userId: user.uid,
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Issue marked as resolved!')),
+        );
+        setState(() {
+          _resolutionImage = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isResolving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final complaintAsync = ref.watch(complaintRepositoryProvider).getComplaint(widget.complaintId);
+    final timelineAsync = ref.watch(complaintTimelineProvider(widget.complaintId));
+    final currentUserAsync = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -40,7 +209,13 @@ class ReportDetailScreen extends ConsumerWidget {
                       'ID: ${complaint.id.substring(0, 8).toUpperCase()}',
                       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey),
                     ),
-                    StatusBadge(status: complaint.status),
+                    Row(
+                      children: [
+                        StatusBadge(status: complaint.status),
+                        const SizedBox(width: 8),
+                        PriorityBadge(priority: complaint.aiPriorityLevel),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -62,6 +237,107 @@ class ReportDetailScreen extends ConsumerWidget {
                   Text('Description', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(complaint.description, style: theme.textTheme.bodyMedium),
+                ],
+                if (complaint.aiPriorityLevel != null && complaint.aiPriorityReason != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.psychology, size: 16, color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Text('AI Priority Assessment', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(complaint.aiPriorityReason!, style: theme.textTheme.bodySmall),
+                        if (complaint.slaHours != null) ...[
+                          const SizedBox(height: 4),
+                          Text('SLA Target: ${complaint.slaHours} Hours', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold)),
+                        ]
+                      ],
+                    ),
+                  ),
+                ],
+                
+                if (complaint.schedulingStatus == 'Scheduled' && complaint.scheduledDate != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
+                          theme.colorScheme.tertiaryContainer.withValues(alpha: 0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+                      boxShadow: [
+                        BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))
+                      ]
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_month, color: theme.colorScheme.primary, size: 20),
+                            const SizedBox(width: 8),
+                            Text('AI Workforce Schedule', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onPrimaryContainer)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('SCHEDULED DATE', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                Text(complaint.scheduledDate ?? '', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('TIME WINDOW', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                Text('${complaint.scheduledStartTime} - ${complaint.expectedCompletionTime}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('SLA DEADLINE', style: theme.textTheme.labelSmall?.copyWith(color: Colors.red[700], fontWeight: FontWeight.bold)),
+                                Text('${complaint.slaHours} hours', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.red[700])),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('DISTANCE & TIME', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                                Text('${complaint.travelDistance} km (${complaint.estimatedTravelTime} mins)', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 
@@ -209,6 +485,111 @@ class ReportDetailScreen extends ConsumerWidget {
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (err, stack) => Text('Error loading timeline: $err'),
                 ),
+                
+                const SizedBox(height: 24),
+                // Crew Action Section
+                if ((complaint.status == 'Team Assigned' || complaint.status == 'Work In Progress') && currentUserAsync.value?.role == 'maintenance') ...[
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text('Crew Actions', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  if (_resolutionImage != null)
+                    Container(
+                      height: 150,
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        image: DecorationImage(
+                          image: FileImage(_resolutionImage!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.camera_alt),
+                          label: const Text('Camera'),
+                          onPressed: () => _pickResolutionImage(ImageSource.camera),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.photo_library),
+                          label: const Text('Gallery'),
+                          onPressed: () => _pickResolutionImage(ImageSource.gallery),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  PrimaryButton(
+                    text: 'Mark Resolved',
+                    isLoading: _isResolving,
+                    onPressed: _resolutionImage == null ? null : () => _markAsResolved(complaint.assetType),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Rating Section
+                if (complaint.status == 'Resolved') ...[
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text('Crew Rating', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  
+                  if (complaint.rating != null) ...[
+                    // Show existing rating
+                    Row(
+                      children: List.generate(5, (index) {
+                        return Icon(
+                          index < complaint.rating! ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                        );
+                      }),
+                    ),
+                    if (complaint.ratingComment != null && complaint.ratingComment!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('"${complaint.ratingComment}"', style: const TextStyle(fontStyle: FontStyle.italic)),
+                    ]
+                  ] else if (currentUserAsync.value?.role == 'citizen') ...[
+                    // Show rating form for citizen
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        return IconButton(
+                          icon: Icon(
+                            index < _ratingValue ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
+                            size: 40,
+                          ),
+                          onPressed: () => setState(() => _ratingValue = index + 1),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _commentController,
+                      decoration: const InputDecoration(
+                        hintText: 'Leave a comment for the crew...',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 16),
+                    PrimaryButton(
+                      text: 'Submit Rating',
+                      isLoading: _isRating,
+                      onPressed: () => _submitRating(complaint.assignedTeamId),
+                    ),
+                  ] else ...[
+                    const Text('No rating given yet.'),
+                  ],
+                  const SizedBox(height: 24),
+                ],
               ],
             ),
           );
