@@ -96,6 +96,20 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
   }
 
   Future<void> _pickBarricadeImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const GeotagCamera()),
+      );
+      
+      if (result != null && result is Map) {
+        setState(() {
+          _barricadeImage = result['file'];
+        });
+      }
+      return;
+    }
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: source,
@@ -635,7 +649,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   icon: const Icon(Icons.camera_alt, size: 16),
-                                  label: const Text('Take Photo'),
+                                  label: const Text('Camera'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.orange.shade700,
                                     side: BorderSide(color: Colors.orange.shade300),
@@ -645,18 +659,31 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                    foregroundColor: Colors.white,
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.photo_library, size: 16),
+                                  label: const Text('Gallery'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.orange.shade700,
+                                    side: BorderSide(color: Colors.orange.shade300),
                                   ),
-                                  onPressed: _barricadeImage == null ? null : _markAsBarricaded,
-                                  child: _isBarricading
-                                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                      : const Text('Mark Secured'),
+                                  onPressed: () => _pickBarricadeImage(ImageSource.gallery),
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: _barricadeImage == null ? null : _markAsBarricaded,
+                              child: _isBarricading
+                                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('Mark Secured'),
+                            ),
                           ),
                         ],
                       ),
