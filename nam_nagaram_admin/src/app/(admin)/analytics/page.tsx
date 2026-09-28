@@ -44,15 +44,43 @@ export default function AnalyticsPage() {
     );
   }
 
+  // Time Filter State
+  const [timeFilter, setTimeFilter] = useState<"week" | "month" | "year" | "all">("all");
+
   // Calculate KPIs
-  const totalIssues = complaints.length;
-  const resolvedIssues = complaints.filter(c => c.status === "Resolved").length;
-  const pendingIssues = complaints.filter(c => c.status === "Submitted" || c.status === "Under Review").length;
-  const inProgressIssues = complaints.filter(c => c.status === "In Progress" || c.status === "Work In Progress" || c.status === "Team Assigned").length;
-  const criticalIssues = complaints.filter(c => (c.priority || "").toUpperCase() === "CRITICAL").length;
+  const filteredComplaints = complaints.filter(c => {
+    if (timeFilter === "all") return true;
+    if (!c.createdAt) return true;
+    
+    const createdDate = c.createdAt.toDate();
+    const now = new Date();
+    
+    if (timeFilter === "week") {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(now.getDate() - 7);
+      return createdDate >= oneWeekAgo;
+    }
+    if (timeFilter === "month") {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(now.getMonth() - 1);
+      return createdDate >= oneMonthAgo;
+    }
+    if (timeFilter === "year") {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(now.getFullYear() - 1);
+      return createdDate >= oneYearAgo;
+    }
+    return true;
+  });
+
+  const totalIssues = filteredComplaints.length;
+  const resolvedIssues = filteredComplaints.filter(c => c.status === "Resolved").length;
+  const pendingIssues = filteredComplaints.filter(c => c.status === "Submitted" || c.status === "Under Review").length;
+  const inProgressIssues = filteredComplaints.filter(c => c.status === "In Progress" || c.status === "Work In Progress" || c.status === "Team Assigned").length;
+  const criticalIssues = filteredComplaints.filter(c => (c.priority || "").toUpperCase() === "CRITICAL").length;
   
   // Try to determine source, default to Citizen if unknown
-  const iotIssues = complaints.filter(c => (c as any).source === "IoT").length;
+  const iotIssues = filteredComplaints.filter(c => (c as any).source === "IoT").length;
   const citizenIssues = totalIssues - iotIssues;
 
   const totalCrews = teams.length;
@@ -65,7 +93,7 @@ export default function AnalyticsPage() {
   
   let totalResolutionTime = 0;
   let resolvedWithTime = 0;
-  complaints.forEach(c => {
+  filteredComplaints.forEach(c => {
     if (c.status === "Resolved" && c.createdAt && c.updatedAt) {
       const created = c.createdAt.toDate().getTime();
       const resolved = c.updatedAt.toDate().getTime();
@@ -77,20 +105,20 @@ export default function AnalyticsPage() {
   const avgResTimeHrs = resolvedWithTime > 0 ? (totalResolutionTime / resolvedWithTime / (1000 * 60 * 60)).toFixed(1) + " hrs" : "N/A";
 
   // Data for Charts
-  const statusCounts = complaints.reduce((acc, c) => {
+  const statusCounts = filteredComplaints.reduce((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   const statusChartData = Object.keys(statusCounts).map(k => ({ name: k, value: statusCounts[k] }));
 
-  const priorityCounts = complaints.reduce((acc, c) => {
+  const priorityCounts = filteredComplaints.reduce((acc, c) => {
     const p = (c.priority || "Unassigned").toUpperCase();
     acc[p] = (acc[p] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   const priorityChartData = Object.keys(priorityCounts).map(k => ({ name: k, count: priorityCounts[k] }));
 
-  const assetTypeCounts = complaints.reduce((acc, c) => {
+  const assetTypeCounts = filteredComplaints.reduce((acc, c) => {
     const t = c.assetType || "Unknown";
     acc[t] = (acc[t] || 0) + 1;
     return acc;
@@ -101,9 +129,39 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">System Analytics</h1>
-        <p className="text-gray-500 text-sm mt-1">Real-time NAM NAGARAM platform metrics</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">System Analytics</h1>
+          <p className="text-gray-500 text-sm mt-1">Real-time NAM NAGARAM platform metrics</p>
+        </div>
+        
+        {/* Time Filter Controls */}
+        <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-start">
+          <button 
+            onClick={() => setTimeFilter("week")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${timeFilter === "week" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          >
+            This Week
+          </button>
+          <button 
+            onClick={() => setTimeFilter("month")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${timeFilter === "month" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          >
+            This Month
+          </button>
+          <button 
+            onClick={() => setTimeFilter("year")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${timeFilter === "year" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          >
+            This Year
+          </button>
+          <button 
+            onClick={() => setTimeFilter("all")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${timeFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          >
+            All Time
+          </button>
+        </div>
       </div>
 
       {/* KPI Grid */}

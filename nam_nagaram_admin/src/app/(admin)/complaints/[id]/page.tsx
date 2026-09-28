@@ -312,6 +312,17 @@ export default function ComplaintDetailPage() {
                   {complaint.description || 'No description provided.'}
                 </p>
               </div>
+              
+              {complaint.aiPriorityReason && (
+                <div className="md:col-span-2">
+                  <p className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
+                    <Cpu className="w-4 h-4" /> AI System Log
+                  </p>
+                  <p className="text-indigo-900 bg-indigo-50/80 p-4 rounded-lg text-sm border border-indigo-100">
+                    {complaint.aiPriorityReason}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
