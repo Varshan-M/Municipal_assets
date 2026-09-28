@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 import threading
 import socket
+import uuid
 import firebase_admin
 from firebase_admin import credentials, firestore
 from api.agent_worker import start_listening
@@ -369,6 +370,129 @@ async def iot_report(
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+@app.post("/iot-report")
+async def iot_report(
+    latitude: str = Form(None),
+    longitude: str = Form(None),
+    image: UploadFile = File(...)
+):
+    global model, classes, db
+    
+    if model is None or db is None:
+        return JSONResponse(status_code=503, content={"success": False, "message": "Backend not fully initialized."})
+
+    contents = await image.read()
+    temp_path = f"temp_iot_img_{uuid.uuid4().hex[:6]}.jpg"
+    with open(temp_path, "wb") as f:
+        f.write(contents)
+        
+    try:
+        img = tf.keras.utils.load_img(temp_path, target_size=IMG_SIZE)
+        img_array = tf.expand_dims(tf.keras.utils.img_to_array(img), 0)
+        
+        # ImageNet Pre-check
+        img_array_preprocessed = preprocess_input(img_array.numpy().copy())
+        imagenet_preds = imagenet_model.predict(img_array_preprocessed, verbose=0)
+        decoded_preds = decode_predictions(imagenet_preds, top=3)[0]
+        
+        for _, class_name, prob in decoded_preds:
+            if prob > 0.15 and any(kw in class_name.lower().replace('_', ' ') for kw in JUNK_KEYWORDS):
+                return JSONResponse(content={"success": False, "message": f"Rejected as junk: {class_name}"})
+
+        # Custom model prediction
+        predictions = model.predict(img_array, verbose=0)[0]
+        predicted_idx = np.argmax(predictions)
+        predicted_class = classes[str(predicted_idx)]
+        confidence = float(predictions[predicted_idx])
+        
+        valid_issues = {
+            "pothole": {"assetType": "Road", "issueType": "Pothole"},
+            "building_crack": {"assetType": "Public Building", "issueType": "Crack"},
+            "street_light_not_working": {"assetType": "Street Light", "issueType": "Not Working"},
+            "trash_bin": {"assetType": "Garbage Bin", "issueType": "Overflowing"}
+        }
+        
+        if predicted_class not in valid_issues or confidence < 0.70:
+            return JSONResponse(content={
+                "success": True, 
+                "detected": predicted_class,
+                "confidence": confidence,
+                "message": "No actionable issue detected or confidence too low."
+            })
+            
+        issue_data = valid_issues[predicted_class]
+        
+        # Watermark the image
+        try:
+            pil_img = Image.open(temp_path).convert("RGB")
+            draw = ImageDraw.Draw(pil_img, "RGBA")
+            width, height = pil_img.size
+            
+            rect_height = max(80, int(height * 0.15))
+            draw.rectangle([(0, height - rect_height), (width, height)], fill=(0, 0, 0, 180))
+            
+            font = ImageFont.load_default()
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            lat_val = str(latitude)[:9] if latitude else "Unknown"
+            lng_val = str(longitude)[:9] if longitude else "Unknown"
+            
+            text_lat_lng = f"Lat: {lat_val}, Lng: {lng_val}"
+            text_date = f"Date: {timestamp}"
+            text_iot = f"Source: IoT Camera System"
+            
+            draw.text((10, height - rect_height + 10), text_lat_lng, fill=(255, 255, 255), font=font)
+            draw.text((10, height - rect_height + 30), text_date, fill=(255, 255, 255), font=font)
+            draw.text((10, height - rect_height + 50), text_iot, fill=(255, 255, 255), font=font)
+            
+            buffered = io.BytesIO()
+            pil_img.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            watermarked_base64 = f"data:image/jpeg;base64,{img_str}"
+        except Exception as e:
+            print(f"IoT watermark failed: {e}")
+            watermarked_base64 = None
+            
+        if not watermarked_base64:
+             return JSONResponse(status_code=500, content={"success": False, "message": "Failed to process image."})
+             
+        # Write to Firebase
+        complaint_id = str(uuid.uuid4())
+        db.collection('complaints').document(complaint_id).set({
+            'userId': 'iot_camera_system',
+            'assetType': issue_data['assetType'],
+            'issueType': issue_data['issueType'],
+            'description': f"Automatically detected by IoT Camera with {confidence*100:.1f}% confidence.",
+            'latitude': float(latitude) if latitude else 0.0,
+            'longitude': float(longitude) if longitude else 0.0,
+            'address': f"IoT Auto-Generated: {latitude}, {longitude}",
+            'status': 'Submitted',
+            'citizenPriority': 'Normal',
+            'createdAt': firestore.SERVER_TIMESTAMP,
+            'updatedAt': firestore.SERVER_TIMESTAMP,
+            'imageUrl': watermarked_base64,
+            'aiConfidence': confidence,
+            'aiCategory': issue_data['assetType']
+        })
+        
+        return JSONResponse(content={
+            "success": True,
+            "detected": predicted_class,
+            "confidence": confidence,
+            "complaint_id": complaint_id,
+            "message": f"Successfully created complaint for {predicted_class}"
+        })
+        
+    except Exception as e:
+        print(f"IoT Report Error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
 
 if __name__ == "__main__":
     import uvicorn

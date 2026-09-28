@@ -59,6 +59,31 @@ def generate_followup_message(asset_type, issue_type, description, address):
         print(f"Error generating message with Gemini: {e}")
         return "Your reported issue has been successfully resolved. Thank you for your contribution to our community!"
 
+def evaluate_rating_reopen(rating_val, comment):
+    if float(rating_val) > 2 or not str(comment).strip():
+        return False
+        
+    prompt = f"""
+    You are a Quality Assurance AI for a municipal maintenance team.
+    A citizen gave a rating of {rating_val}/5 stars with the following comment:
+    "{comment}"
+    
+    Determine if the citizen is stating that the work was NOT done, incomplete, or completely unsatisfactory, meaning the team needs to go back and fix it.
+    Return ONLY "YES" if the task should be reopened and reassigned to the team.
+    Return ONLY "NO" if the task is fine to remain closed (e.g. they are just mildly annoyed but it's done).
+    """
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.strip().upper()
+        return "YES" in text
+    except Exception as e:
+        print(f"Error evaluating rating with Gemini: {e}")
+        # Fallback if we hit API Rate Limits during testing
+        lower_comment = comment.lower()
+        if "not done" in lower_comment or "nothing" in lower_comment or "didn't do" in lower_comment or "did not" in lower_comment:
+            return True
+        return False
+
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in km
     dLat = math.radians(lat2 - lat1)
@@ -123,12 +148,16 @@ def evaluate_priority(asset_type, issue_type, description, address, citizen_prio
 def generate_crew_assignment(asset_type, issue_type, address, complaint_lat, complaint_lng, priority_level, sla_hours):
     # Fetch live crews and calculate their current active workloads
     try:
-        crews_ref = db.collection('crews').where('isOnline', '==', True).stream()
+        crews_ref = db.collection('crews').stream()
         crew_list_text = ""
         crew_map = {}
         
         for crew in crews_ref:
             data = crew.to_dict()
+            # TEMPORARILY DISABLED FOR SINGLE-DEVICE TESTING:
+            # if not data.get('isOnline'):
+            #     continue
+                
             crew_name = data.get('name', crew.id)
             crew_map[crew_name] = crew.id
             skills = ", ".join(data.get('skills', []))
@@ -285,11 +314,121 @@ def on_snapshot(doc_snapshot, changes, read_time):
                             print(f"    - Successfully sent FCM Push Notification to citizen topic: user_{user_id}\n")
                         except Exception as e:
                             print(f"    - Error sending FCM Push Notification to citizen: {e}\n")
+                            
+                        # Write to Firestore collection for in-app display
+                        try:
+                            db.collection('notifications').document().set({
+                                'userId': user_id,
+                                'title': 'Issue Resolved!',
+                                'body': f'Your reported {asset_type} issue has been resolved. Thank you!',
+                                'createdAt': firestore.SERVER_TIMESTAMP,
+                                'read': False,
+                                'complaintId': complaint_id
+                            })
+                        except Exception as e:
+                            print(f"    - Error writing to notifications collection: {e}\n")
                     else:
                         print("\n")
                     
                 except Exception as e:
                     print(f"    - Error updating Firestore for {complaint_id}: {e}\n")
+
+            # Check if rating was just submitted
+            if data.get('rating') is not None and not data.get('agent_rating_notified'):
+                assigned_team_id = data.get('assignedTeamId')
+                if assigned_team_id:
+                    rating_val = data.get('rating')
+                    comment = data.get('ratingComment', '')
+                    complaint_id = doc.id
+                    
+                    print(f"[*] Detected new rating for complaint: {complaint_id}")
+                    
+                    # AI Rating Agent: Check if we need to reopen the issue
+                    should_reopen = evaluate_rating_reopen(rating_val, comment)
+                    
+                    try:
+                        from firebase_admin import messaging
+                        
+                        if should_reopen:
+                            print(f"    - AI decided to REOPEN complaint {complaint_id} due to negative feedback.")
+                            
+                            # 1. Update Complaint Status & clear rating
+                            db.collection('complaints').document(complaint_id).update({
+                                'status': 'Team Assigned',
+                                'agent_rating_notified': False, # Allow rating again later
+                                'rating': firestore.DELETE_FIELD,
+                                'ratingComment': firestore.DELETE_FIELD
+                            })
+                            
+                            # 2. Add Timeline Entry
+                            timeline_ref = db.collection('complaints').document(complaint_id).collection('timeline')
+                            timeline_id = str(uuid.uuid4())
+                            timeline_ref.document(timeline_id).set({
+                                'id': timeline_id,
+                                'status': 'Reopened',
+                                'message': f'AI Quality Agent: The citizen reported that the work was incomplete or unsatisfactory ("{comment}"). This task has been automatically reopened and reassigned to you.',
+                                'timestamp': firestore.SERVER_TIMESTAMP,
+                                'updatedBy': 'AI_Quality_Agent',
+                                'isAiGenerated': True
+                            })
+                            
+                            # 3. Send Push Notification to Team
+                            msg = messaging.Message(
+                                notification=messaging.Notification(
+                                    title='Task Reopened! ⚠️',
+                                    body=f'Citizen reported work as incomplete. Rating: {rating_val} stars. Check timeline for details.'
+                                ),
+                                data={'complaintId': complaint_id},
+                                android=messaging.AndroidConfig(
+                                    priority='high',
+                                    notification=messaging.AndroidNotification(
+                                        sound='default'
+                                    )
+                                ),
+                                topic=f'team_{assigned_team_id}'
+                            )
+                            messaging.send(msg)
+                            
+                            log_ai_action('REOPEN_TASK', complaint_id, f"Reopened due to bad rating ({rating_val}) and comment: {comment}")
+                            
+                        else:
+                            # Standard Rating Processing
+                            msg = messaging.Message(
+                                notification=messaging.Notification(
+                                    title=f'Got {rating_val} stars for this work! ⭐',
+                                    body=f'Citizen comment: "{comment}"' if comment else 'Great job! The citizen was happy with your work.'
+                                ),
+                                data={'complaintId': complaint_id},
+                                android=messaging.AndroidConfig(
+                                    priority='high',
+                                    notification=messaging.AndroidNotification(
+                                        sound='default'
+                                    )
+                                ),
+                                topic=f'team_{assigned_team_id}'
+                            )
+                            messaging.send(msg)
+                            print(f"    - Successfully sent FCM Push Notification for Rating to team_{assigned_team_id}")
+                            
+                            
+                            # Write to Firestore collection for in-app display
+                            try:
+                                db.collection('notifications').document().set({
+                                    'teamId': assigned_team_id,
+                                    'title': f'Got {rating_val} stars for this work! ⭐',
+                                    'body': f'Citizen comment: "{comment}"' if comment else 'Great job! The citizen was happy with your work.',
+                                    'createdAt': firestore.SERVER_TIMESTAMP,
+                                    'read': False,
+                                    'complaintId': complaint_id
+                                })
+                            except Exception as e:
+                                print(f"    - Error writing rating to notifications collection: {e}")
+                                
+                            db.collection('complaints').document(complaint_id).update({
+                                'agent_rating_notified': True
+                            })
+                    except Exception as e:
+                        print(f"    - Error handling Rating/Reopen logic: {e}")
 
             # Check if status is Submitted and needs Priority or Assignment
             elif data.get('status') == 'Submitted' and not data.get('assignedTeamId'):
