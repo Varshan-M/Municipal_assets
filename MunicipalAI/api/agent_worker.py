@@ -99,14 +99,16 @@ def check_for_duplicates(complaint_id, asset_type, issue_type, complaint_lat, co
         return None
         
     try:
-        active_statuses = ['Submitted', 'Team Assigned', 'In Progress']
-        docs = db.collection('complaints').where('assetType', '==', asset_type).where('issueType', '==', issue_type).where('status', 'in', active_statuses).stream()
+        active_statuses = ['Submitted', 'Team Assigned', 'In Progress', 'Work In Progress']
+        docs = db.collection('complaints').where('status', 'in', active_statuses).stream()
                  
         for doc in docs:
             if doc.id == complaint_id:
                 continue
                 
             data = doc.to_dict()
+            if data.get('assetType') != asset_type or data.get('issueType') != issue_type:
+                continue
             other_lat = data.get('latitude')
             other_lng = data.get('longitude')
             
