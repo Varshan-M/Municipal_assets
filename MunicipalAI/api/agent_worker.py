@@ -460,12 +460,7 @@ def on_snapshot(doc_snapshot, changes, read_time):
                     
                     print(f"    - Assigned Priority: {priority_level} (SLA: {sla_hours}h) | Reason: {priority_reason}")
                     
-                    # Log the priority in Firestore before scheduling
-                    db.collection('complaints').document(complaint_id).update({
-                        'aiPriorityLevel': priority_level,
-                        'aiPriorityReason': priority_reason,
-                        'slaHours': sla_hours
-                    })
+                    # Store priority to be updated at the end
                     log_ai_action('PRIORITY_ASSESSMENT', complaint_id, f"Evaluated as {priority_level} Priority. Reason: {priority_reason}")
                 
                 # --- PHASE 2: Intelligent Scheduling Agent ---
