@@ -183,6 +183,8 @@ def generate_crew_schedule(asset_type, issue_type, address, complaint_lat, compl
         
         for crew in crews_ref:
             data = crew.to_dict()
+            if data.get('isOnline') != True:
+                continue
             crew_name = data.get('name', crew.id)
             
             # Fetch active tasks to calculate Existing Schedule and Workload
