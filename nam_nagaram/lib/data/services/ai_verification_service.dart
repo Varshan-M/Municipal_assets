@@ -1,16 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class AiVerificationService {
   // Defaults to a localhost URL but will automatically update from Firestore
-  final String _baseUrl = 'https://municipal-assets.onrender.com';
+  String _baseUrl = 'https://municipal-assets.onrender.com';
 
   AiVerificationService() {
-    // _initializeDynamicUrl();
+    _initializeDynamicUrl();
   }
 
-  /*
   Future<void> _initializeDynamicUrl() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('backend_config').get();
@@ -22,7 +23,6 @@ class AiVerificationService {
       debugPrint('Failed to fetch dynamic backend URL, using fallback: $_baseUrl');
     }
   }
-  */
 
   Future<Map<String, dynamic>> verifyAssetImage(File imageFile, String asset, String problem, {String? latitude, String? longitude, String? address}) async {
     try {

@@ -13,6 +13,7 @@ from api.mqtt_worker import start_mqtt_worker
 from api.supervisor_agent import start_supervisor_worker
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input, decode_predictions
 from PIL import Image, ImageDraw, ImageFont
@@ -25,6 +26,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from verify_image import verify_image_logic, verify_resolution_logic
 
 app = FastAPI(title="Municipal Asset Verification API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MODELS_DIR = Path(os.path.abspath(__file__)).parent.parent / "models"
 MODEL_PATH = MODELS_DIR / "municipal_asset_model.keras"
