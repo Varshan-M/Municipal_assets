@@ -602,7 +602,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   const SizedBox(height: 8),
 
                   // --- Temporary Barricade Section ---
-                  if (complaint.barricadeImageUrl == null) ...[
+                  if (complaint.barricadeImageUrl == null && complaint.assetType == 'Road') ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
