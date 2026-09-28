@@ -393,6 +393,16 @@ def on_snapshot(doc_snapshot, changes, read_time):
                 except Exception as e:
                     print(f"    - Error updating Firestore for {complaint_id}: {e}\n")
 
+            # If the complaint was previously auto-rejected as a duplicate but got overwritten by another agent, force it back!
+            ai_reason = data.get('aiPriorityReason', '')
+            if isinstance(ai_reason, str) and 'Auto-rejected: Duplicate' in ai_reason and data.get('status') != 'Rejected':
+                print(f"[*] FORCING duplicate {doc.id} back to Rejected status (overwriting rogue agent/cloud function)!")
+                db.collection('complaints').document(doc.id).update({
+                    'status': 'Rejected',
+                    'updatedAt': firestore.SERVER_TIMESTAMP
+                })
+                continue
+                
             # Check if rating was just submitted
             if data.get('rating') is not None and not data.get('agent_rating_notified'):
                 assigned_team_id = data.get('assignedTeamId')
