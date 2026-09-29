@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Menu } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 export default function Header() {
@@ -28,15 +28,6 @@ export default function Header() {
       <div className="flex items-center space-x-6">
         <div className="hidden lg:flex items-center text-sm text-text-muted bg-gray-100 px-3 py-1.5 rounded-full">
           {today}
-        </div>
-        
-        <div className="relative hidden md:block">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search ID, location..." 
-            className="pl-9 pr-4 py-1.5 bg-gray-100 border-transparent rounded-full text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 transition-all w-64"
-          />
         </div>
       </div>
     </header>
