@@ -51,18 +51,21 @@ export default function DashboardPage() {
         const aiProcessed = data.aiProcessed;
         const priority = data.priority || 'LOW';
 
-        if (status === 'Submitted') pending++;
-        else if (status === 'In Progress' || status === 'Under Review' || status === 'Assigned') inProgress++;
-        else if (status === 'Resolved') resolved++;
+        if (status === 'Submitted' || status === 'Pending') pending++;
+        else if (status === 'Resolved' || status === 'Closed') resolved++;
+        else if (status !== 'Rejected') inProgress++; // Anything else (Team Assigned, Work In Progress, Under Review, etc.) is in progress
 
         if (aiProcessed) {
           processed++;
-          if (data.aiAnalysis) {
-            if (data.aiAnalysis.confidence >= 0.80 && priority !== 'CRITICAL') autoAssigned++;
-            else manualReview++;
+          // Auto Assigned if AI processed it and a team was assigned without manual override
+          if (data.assignedTeamId && !data.aiOverridden) {
+            autoAssigned++;
+          } else if (status === 'Under Review' || status === 'Submitted') {
+            manualReview++;
           }
-          if (priority === 'HIGH') highPriority++;
-          if (priority === 'CRITICAL') critical++;
+          
+          if (priority === 'HIGH' || priority === 'High') highPriority++;
+          if (priority === 'CRITICAL' || priority === 'Critical') critical++;
         } else {
           // Push to processing queue if we have an admin user
           unprocessedComplaints.push({ id: doc.id, ...data } as Complaint);
