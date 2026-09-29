@@ -75,8 +75,8 @@ export default function AnalyticsPage() {
 
   const totalIssues = filteredComplaints.length;
   const resolvedIssues = filteredComplaints.filter(c => c.status === "Resolved" || c.status === "Closed").length;
-  const pendingIssues = filteredComplaints.filter(c => c.status === "Submitted" || c.status === "Pending").length;
-  const inProgressIssues = filteredComplaints.filter(c => c.status !== "Resolved" && c.status !== "Closed" && c.status !== "Submitted" && c.status !== "Pending" && c.status !== "Rejected").length;
+  const pendingIssues = filteredComplaints.filter(c => c.status === "Submitted").length;
+  const inProgressIssues = filteredComplaints.filter(c => c.status !== "Resolved" && c.status !== "Closed" && c.status !== "Submitted" && c.status !== "Rejected").length;
   const criticalIssues = filteredComplaints.filter(c => (c.priority || "").toUpperCase() === "CRITICAL").length;
   
   // Try to determine source, default to Citizen if unknown

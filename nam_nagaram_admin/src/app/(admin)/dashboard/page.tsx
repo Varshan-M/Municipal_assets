@@ -51,7 +51,7 @@ export default function DashboardPage() {
         const aiProcessed = data.aiProcessed;
         const priority = data.priority || 'LOW';
 
-        if (status === 'Submitted' || status === 'Pending') pending++;
+        if (status === 'Submitted') pending++;
         else if (status === 'Resolved' || status === 'Closed') resolved++;
         else if (status !== 'Rejected') inProgress++; // Anything else (Team Assigned, Work In Progress, Under Review, etc.) is in progress
 
