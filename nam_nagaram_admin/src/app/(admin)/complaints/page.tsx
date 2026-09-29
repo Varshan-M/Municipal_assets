@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Complaint } from "@/types";
-import { Search, Filter, Eye, AlertCircle } from "lucide-react";
+import { Search, Eye, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -79,10 +79,6 @@ export default function ComplaintsPage() {
               className="w-full pl-9 pr-4 py-2 bg-surface border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors text-text">
-            <Filter className="w-4 h-4" />
-            <span className="hidden sm:inline">Filters</span>
-          </button>
         </div>
       </div>
 
